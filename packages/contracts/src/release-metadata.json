@@ -1,5 +1,5 @@
 {
-  "name": "PluginName",
-  "description": "Description.",
+  "name": "HarmonyHIPVotingPlugin",
+  "description": "Validator-governed voting for Harmony.",
   "images": {}
 }

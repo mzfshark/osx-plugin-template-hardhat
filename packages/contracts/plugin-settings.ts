@@ -14,8 +14,8 @@ export function generateRandomName(length: number): string {
 }
 
 // Specify your plugin implementation and plugin setup contract name.
-export const PLUGIN_CONTRACT_NAME = 'MyPlugin'; // See `packages/contracts/src/MyPlugin.sol`.
-export const PLUGIN_SETUP_CONTRACT_NAME = 'MyPluginSetup'; // See `packages/contracts/src/MyPluginSetup.sol`.
+export const PLUGIN_CONTRACT_NAME = 'HarmonyHIPVotingPlugin'; // See `packages/contracts/src/harmony/HarmonyHIPVotingPlugin.sol`.
+export const PLUGIN_SETUP_CONTRACT_NAME = 'HarmonyHIPVotingSetup'; // See `packages/contracts/src/setup/HarmonyHIPVotingSetup.sol`.
 
 // Pick an ENS name for your plugin. E.g., 'my-cool-plugin'.
 // For more details, visit https://devs.aragon.org/docs/osx/how-it-works/framework/ens-names.
@@ -35,3 +35,22 @@ export const METADATA = {
   build: buildMetadata,
   release: releaseMetadata,
 };
+
+// Specify your plugin setup contract constructor arguments.
+export const PLUGIN_SETUP_CONTRACT_ARGS: {[key: string]: any[]} = {
+  HarmonyHIPVotingSetup: [
+    process.env.ORACLE_ADDRESS || '0xA55d9ef16Af921b70Fed1421C1D298Ca5A3a18F1',
+    process.env.ALLOWLIST_PROXY_ADDRESS ||
+      '0xe7b0445369b7a653ad4f05f79b5797bc3fefcef7',
+    process.env.OPT_IN_REGISTRY_ADDRESS ||
+      '0xefd431a6c97bff60dd60eeadedee3ce38e561180',
+  ],
+  HarmonyDelegationVotingSetup: [
+    process.env.ORACLE_ADDRESS || '0xA55d9ef16Af921b70Fed1421C1D298Ca5A3a18F1',
+    process.env.OPT_IN_REGISTRY_ADDRESS ||
+      '0xefd431a6c97bff60dd60eeadedee3ce38e561180',
+    process.env.ALLOWLIST_PROXY_ADDRESS ||
+      '0xe7b0445369b7a653ad4f05f79b5797bc3fefcef7',
+  ],
+};
+

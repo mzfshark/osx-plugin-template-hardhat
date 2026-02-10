@@ -1,4 +1,7 @@
-import {PLUGIN_SETUP_CONTRACT_NAME} from '../../plugin-settings';
+import {
+  PLUGIN_SETUP_CONTRACT_NAME,
+  PLUGIN_SETUP_CONTRACT_ARGS,
+} from '../../plugin-settings';
 import {DeployFunction} from 'hardhat-deploy/types';
 import {HardhatRuntimeEnvironment} from 'hardhat/types';
 import path from 'path';
@@ -14,9 +17,11 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const {deploy} = deployments;
   const {deployer} = await getNamedAccounts();
 
+  const args = PLUGIN_SETUP_CONTRACT_ARGS[PLUGIN_SETUP_CONTRACT_NAME] || [];
+
   const res = await deploy(PLUGIN_SETUP_CONTRACT_NAME, {
     from: deployer,
-    args: [],
+    args: args,
     log: true,
   });
 
