@@ -28,7 +28,7 @@ dotenvConfig({path: resolve(__dirname, dotenvConfigPath), override: true});
 if (process.env.ALCHEMY_API_KEY) {
   addRpcUrlToNetwork(process.env.ALCHEMY_API_KEY);
 } else {
-  throw new Error('ALCHEMY_API_KEY in .env not set');
+  console.warn('ALCHEMY_API_KEY in .env not set');
 }
 
 // Fetch the accounts specified in the .env file
@@ -108,6 +108,11 @@ const config: HardhatUserConfig = {
         Object.keys(namedAccounts).length
       ),
     },
+    harmony: {
+      url: process.env.HARMONY_RPC_URL || 'https://api.harmony.one',
+      accounts: specifiedAccounts(),
+      chainId: 1666600000,
+    },
     ...networks,
   },
 
@@ -119,8 +124,17 @@ const config: HardhatUserConfig = {
       polygon: process.env.POLYGONSCAN_API_KEY || '',
       base: process.env.BASESCAN_API_KEY || '',
       arbitrumOne: process.env.ARBISCAN_API_KEY || '',
+      harmony: process.env.HARMONY_EXPLORER_API_KEY || 'one',
     },
     customChains: [
+      {
+        network: 'harmony',
+        chainId: 1666600000,
+        urls: {
+          apiURL: 'https://explorer.harmony.one/api',
+          browserURL: 'https://explorer.harmony.one',
+        },
+      },
       {
         network: 'sepolia',
         chainId: 11155111,
