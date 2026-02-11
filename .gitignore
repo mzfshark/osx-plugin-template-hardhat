@@ -9,6 +9,7 @@ coverage
 dist
 node_modules
 typechain
+docs/plans/*
 
 packages/subgraph/imported
 packages/subgraph/generated
