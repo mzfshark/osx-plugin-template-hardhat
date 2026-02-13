@@ -23,6 +23,19 @@ import 'solidity-coverage';
 const dotenvConfigPath: string = process.env.DOTENV_CONFIG_PATH || '../../.env';
 dotenvConfig({path: resolve(__dirname, dotenvConfigPath), override: true});
 
+function parseGasPriceWei(value: string | undefined, fallback: number): number {
+  const parsed = value ? Number(value) : Number.NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+// Harmony can reject txs with gasPrice too low ("transaction underpriced").
+// Keep a conservative minimum, allowing override via env (in wei).
+const MIN_HARMONY_GAS_PRICE_WEI = 30_000_000_000; // 30 gwei
+
+// Accept both env var names to match AragonOSX and keep backwards compatibility.
+const keyList = (process.env.ETH_KEY || process.env.PRIVATE_KEY || '').trim();
+const accounts = keyList ? keyList.split(',').map(s => s.trim()).filter(Boolean) : [];
+
 // check alchemy Api key existence
 if (process.env.ALCHEMY_API_KEY) {
   addRpcUrlToNetwork(process.env.ALCHEMY_API_KEY);
@@ -32,7 +45,7 @@ if (process.env.ALCHEMY_API_KEY) {
 
 // Fetch the accounts specified in the .env file
 function specifiedAccounts(): string[] {
-  return process.env.PRIVATE_KEY ? process.env.PRIVATE_KEY.split(',') : [];
+  return accounts;
 }
 
 function getHardhatNetworkAccountsConfig(
@@ -108,9 +121,22 @@ const config: HardhatUserConfig = {
       ),
     },
     harmony: {
-      url: process.env.HARMONY_RPC_URL || 'https://api.harmony.one',
+      url: process.env.HARMONY_MAINNET_RPC || process.env.HARMONY_RPC_URL || 'https://api.harmony.one',
       accounts: specifiedAccounts(),
       chainId: 1666600000,
+      gasPrice: Math.max(
+        parseGasPriceWei(process.env.HARMONY_GAS_PRICE, MIN_HARMONY_GAS_PRICE_WEI),
+        MIN_HARMONY_GAS_PRICE_WEI
+      ),
+    },
+    harmonyTestnet: {
+      url: process.env.HARMONY_TESTNET_RPC || process.env.HARMONY_TESTNET_RPC_URL || '',
+      accounts: specifiedAccounts(),
+      chainId: 1666700000,
+      gasPrice: Math.max(
+        parseGasPriceWei(process.env.HARMONY_TESTNET_GAS_PRICE, MIN_HARMONY_GAS_PRICE_WEI),
+        MIN_HARMONY_GAS_PRICE_WEI
+      ),
     },
     ...networks,
   },
@@ -123,15 +149,17 @@ const config: HardhatUserConfig = {
       polygon: process.env.POLYGONSCAN_API_KEY || '',
       base: process.env.BASESCAN_API_KEY || '',
       arbitrumOne: process.env.ARBISCAN_API_KEY || '',
-      harmony: process.env.HARMONY_EXPLORER_API_KEY || 'one',
+      harmony: process.env.HARMONY_EXPLORER_KEY || process.env.HARMONY_EXPLORER_API_KEY || 'one',
     },
     customChains: [
       {
         network: 'harmony',
         chainId: 1666600000,
         urls: {
-          apiURL: 'https://explorer.harmony.one/api',
-          browserURL: 'https://explorer.harmony.one',
+          apiURL: process.env.HARMONY_EXPLORER_API_URL || 'https://explorer.harmony.one/api',
+          browserURL:
+            process.env.HARMONY_EXPLORER_BROWSER_URL ||
+            'https://explorer.harmony.one',
         },
       },
       {
