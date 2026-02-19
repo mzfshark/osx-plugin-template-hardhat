@@ -1,4 +1,4 @@
-import {findPluginRepo, getProductionNetworkName} from '../../utils/helpers';
+import {findPluginRepo, getProductionNetworkName, resolveNetworkName} from '../../utils/helpers';
 import {
   getLatestNetworkDeployment,
   getNetworkNameByAlias,
@@ -25,10 +25,7 @@ export async function fetchData(
 ): Promise<FetchedData> {
   const [deployer] = await hre.ethers.getSigners();
   const productionNetworkName: string = getProductionNetworkName(hre);
-  const network = getNetworkNameByAlias(productionNetworkName);
-  if (network === null) {
-    throw new UnsupportedNetworkError(productionNetworkName);
-  }
+  const network = resolveNetworkName(productionNetworkName);
   const networkDeployments = getLatestNetworkDeployment(network);
   if (networkDeployments === null) {
     throw `Deployments are not available on network ${network}.`;

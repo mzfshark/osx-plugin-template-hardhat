@@ -3,14 +3,31 @@ import releaseMetadata from './src/release-metadata.json';
 import {VersionTag} from '@aragon/osx-commons-sdk';
 
 export function generateRandomName(length: number): string {
-  const allowedCharacters = 'abcdefghijklmnopqrstuvwxyz-0123456789';
-  let result = '';
-  for (let i = 0; i < length; i++) {
-    result += allowedCharacters.charAt(
-      Math.floor(Math.random() * allowedCharacters.length)
-    );
+  // ENS label constraints (ASCII):
+  // - 1..63 chars
+  // - lowercase letters, numbers, hyphen
+  // - must not start/end with hyphen
+  // - avoid reserved pattern with hyphens at positions 3 and 4 (IDNA)
+  const normalizedLength = Math.max(1, Math.min(63, length));
+  const alphaNum = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  const middleChars = `${alphaNum}-`;
+
+  while (true) {
+    let result = '';
+
+    for (let i = 0; i < normalizedLength; i++) {
+      const chars =
+        i === 0 || i === normalizedLength - 1 ? alphaNum : middleChars;
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+
+    // Reject reserved IDNA shape: xx--...
+    if (result.length >= 4 && result[2] === '-' && result[3] === '-') {
+      continue;
+    }
+
+    return result;
   }
-  return result;
 }
 
 // Specify your plugin implementation and plugin setup contract name.

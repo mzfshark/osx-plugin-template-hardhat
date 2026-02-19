@@ -1,5 +1,5 @@
 import {METADATA, VERSION} from '../../plugin-settings';
-import {getProductionNetworkName, findPluginRepo} from '../../utils/helpers';
+import {getProductionNetworkName, findPluginRepo, resolveNetworkName} from '../../utils/helpers';
 import {
   getLatestNetworkDeployment,
   getNetworkNameByAlias,
@@ -100,10 +100,7 @@ async function fixture(): Promise<FixtureResult> {
     throw `PluginRepo '${ensDomain}' does not exist yet.`;
   }
 
-  const network = getNetworkNameByAlias(productionNetworkName);
-  if (network === null) {
-    throw new UnsupportedNetworkError(productionNetworkName);
-  }
+  const network = resolveNetworkName(productionNetworkName);
   const networkDeployments = getLatestNetworkDeployment(network);
   if (networkDeployments === null) {
     throw `Deployments are not available on network ${network}.`;

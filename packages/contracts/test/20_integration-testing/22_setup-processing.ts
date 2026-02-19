@@ -6,7 +6,7 @@ import {
   MyPluginSetup__factory,
   MyPlugin__factory,
 } from '../../typechain';
-import {getProductionNetworkName, findPluginRepo} from '../../utils/helpers';
+import {getProductionNetworkName, findPluginRepo, resolveNetworkName} from '../../utils/helpers';
 import {installPLugin, uninstallPLugin} from './test-helpers';
 import {
   getLatestNetworkDeployment,
@@ -102,10 +102,7 @@ async function fixture(): Promise<FixtureResult> {
   const [deployer, alice, bob] = await ethers.getSigners();
   const daoMock = await new DAOMock__factory(deployer).deploy();
 
-  const network = getNetworkNameByAlias(productionNetworkName);
-  if (network === null) {
-    throw new UnsupportedNetworkError(productionNetworkName);
-  }
+  const network = resolveNetworkName(productionNetworkName);
   const networkDeployments = getLatestNetworkDeployment(network);
   if (networkDeployments === null) {
     throw `Deployments are not available on network ${network}.`;

@@ -1,0 +1,20 @@
+Note: Reinitializers are not included in validations by default
+
+    @aragon/osx/core/dao/DAO.sol:168: If you want to validate this function as an initializer, annotate it with '@custom:oz-upgrades-validate-as-initializer'
+
+Note: Reinitializers are not included in validations by default
+
+    @aragon/osx/core/dao/DAO.sol:195: If you want to validate this function as an initializer, annotate it with '@custom:oz-upgrades-validate-as-initializer'
+
+Note: Reinitializers are not included in validations by default
+
+    @aragon/osx/framework/plugin/repo/PluginRepo.sol:119: If you want to validate this function as an initializer, annotate it with '@custom:oz-upgrades-validate-as-initializer'
+
+An unexpected error occurred:
+
+[Error: EACCES: permission denied, rmdir '/mnt/d/Rede/Github/mzfshark/osx-plugin-template-hardhat/packages/contracts/cache/validations.json.lock'] {
+  errno: -13,
+  code: 'EACCES',
+  syscall: 'rmdir',
+  path: '/mnt/d/Rede/Github/mzfshark/osx-plugin-template-hardhat/packages/contracts/cache/validations.json.lock'
+}

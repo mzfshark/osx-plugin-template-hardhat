@@ -43,10 +43,64 @@ export function getProductionNetworkName(
   }
 
   if (getNetworkNameByAlias(productionNetworkName) === null) {
-    throw new UnsupportedNetworkError(productionNetworkName);
+    // Try common fallbacks for network naming used by Hardhat or users.
+    const FALLBACK_MAP: {[key: string]: string} = {
+      harmony: 'harmony-mainnet',
+      harmonyTestnet: 'harmony-testnet',
+      harmony_testnet: 'harmony-testnet',
+      mainnet: 'ethereum-mainnet',
+      sepolia: 'sepolia',
+    };
+
+    const mapped = FALLBACK_MAP[productionNetworkName];
+    if (mapped) {
+      // Accept the mapped canonical name even if `getNetworkNameByAlias`
+      // doesn't recognise the original raw name. Downstream code will
+      // attempt to resolve aliases again where needed.
+      productionNetworkName = mapped;
+    } else {
+      throw new UnsupportedNetworkError(productionNetworkName);
+    }
   }
 
   return productionNetworkName;
+}
+
+/**
+ * Resolve a production network name (alias) into a canonical network key
+ * understood by `getLatestNetworkDeployment` and related helpers.
+ * Throws `UnsupportedNetworkError` if resolution fails.
+ */
+export function resolveNetworkName(productionNetworkName: string): string {
+  const canonicalCandidates = new Set<string>([productionNetworkName]);
+  canonicalCandidates.add(productionNetworkName.replace(/-mainnet$/, ''));
+  canonicalCandidates.add(productionNetworkName.replace(/-testnet$/, ''));
+  canonicalCandidates.add('harmony');
+  canonicalCandidates.add('harmony-mainnet');
+  canonicalCandidates.add('harmony-testnet');
+  canonicalCandidates.add('ethereum-mainnet');
+  canonicalCandidates.add('mainnet');
+  canonicalCandidates.add('sepolia');
+
+  for (const candidate of canonicalCandidates) {
+    if (!candidate) continue;
+    const alias = getNetworkNameByAlias(candidate);
+    if (alias !== null) return alias;
+
+    // Defensive: some versions of the deployments getter may throw or
+    // return malformed objects for unknown candidates. Wrap the call
+    // and validate the returned structure before accepting the candidate.
+    try {
+      const d = getLatestNetworkDeployment(candidate as any);
+      if (d !== null && typeof d === 'object' && Object.keys(d).length > 0) {
+        return candidate;
+      }
+    } catch (err) {
+      // Ignore and try the next candidate
+    }
+  }
+
+  throw new UnsupportedNetworkError(productionNetworkName);
 }
 
 export function pluginEnsDomain(hre: HardhatRuntimeEnvironment): string {
@@ -63,35 +117,76 @@ export async function findPluginRepo(
 ): Promise<{pluginRepo: PluginRepo | null; ensDomain: string}> {
   const [deployer] = await hre.ethers.getSigners();
   const productionNetworkName: string = getProductionNetworkName(hre);
-  const network = getNetworkNameByAlias(productionNetworkName);
-  if (network === null) {
-    throw new UnsupportedNetworkError(productionNetworkName);
-  }
-  const networkDeployments = getLatestNetworkDeployment(network);
+  const resolvedNetwork = resolveNetworkName(productionNetworkName);
+  const networkDeployments = getLatestNetworkDeployment(resolvedNetwork);
   if (networkDeployments === null) {
     throw `Deployments are not available on network ${network}.`;
   }
 
-  const registrar = ENSSubdomainRegistrar__factory.connect(
+  // Ensure expected keys exist on the resolved deployments object to
+  // avoid downstream TypeErrors when accessing nested version data.
+  if (
+    typeof networkDeployments !== 'object' ||
+    Object.keys(networkDeployments).length === 0 ||
+    !('PluginENSSubdomainRegistrarProxy' in networkDeployments)
+  ) {
+    throw new Error(
+      `Invalid deployments object for network ${resolvedNetwork}; expected PluginENSSubdomainRegistrarProxy to be present.`
+    );
+  }
+
+  const registrar = await hre.ethers.getContractAt(
+    ENSSubdomainRegistrar__factory.abi,
     networkDeployments.PluginENSSubdomainRegistrarProxy.address,
     deployer
   );
 
   // Check if the ens record exists already
-  const ens = ENS__factory.connect(await registrar.ens(), deployer);
   const ensDomain = pluginEnsDomain(hre);
-  const node = ethers.utils.namehash(ensDomain);
+  // Use ethers.utils.namehash when available, otherwise fall back to
+  // the `eth-ens-namehash` package which provides a compatible hash.
+  let namehashFn: (name: string) => string;
+  try {
+    namehashFn = utils && typeof (utils as any).namehash === 'function'
+      ? (utils as any).namehash
+      : require('eth-ens-namehash').hash;
+  } catch (err) {
+    // If requiring the fallback fails for any reason, rethrow with context.
+    throw new Error(`Failed to resolve namehash function: ${err}`);
+  }
+
+  const node = namehashFn(ensDomain);
+
+  let ensAddress: string;
+  try {
+    ensAddress = await registrar.ens();
+  } catch (err: any) {
+    // If the registrar contract is not initialized on this network
+    // (INIT_NOT_INITIALIZED) or the call reverts for another reason,
+    // treat the ENS as not present and continue without failing the
+    // entire deployment flow.
+    console.warn(
+      `Registrar call failed for ${networkDeployments.PluginENSSubdomainRegistrarProxy.address}: ${
+        err && err.message ? err.message : String(err)
+      }`
+    );
+    return {pluginRepo: null, ensDomain};
+  }
+
+  const ens = await hre.ethers.getContractAt(ENS__factory.abi, ensAddress, deployer);
   const recordExists = await ens.recordExists(node);
 
   if (!recordExists) {
     return {pluginRepo: null, ensDomain};
   } else {
-    const resolver = IAddrResolver__factory.connect(
+    const resolver = await hre.ethers.getContractAt(
+      IAddrResolver__factory.abi,
       await ens.resolver(node),
       deployer
     );
 
-    const pluginRepo = PluginRepo__factory.connect(
+    const pluginRepo = await hre.ethers.getContractAt(
+      PluginRepo__factory.abi,
       await resolver.addr(node),
       deployer
     );

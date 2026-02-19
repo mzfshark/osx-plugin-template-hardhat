@@ -47,11 +47,18 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   }
 
   console.log(
-    `Using account '${
-      deployer.address
-    }' with a balance of ${hre.ethers.utils.formatEther(
-      await deployer.getBalance()
-    )} native tokens.`
+    `Using account '${deployer.address}' with a balance of ${
+      // Fetch balance via provider (works whether `deployer` is a Signer or plain address)
+      (typeof (hre.ethers as any).formatEther === 'function'
+        ? (hre.ethers as any).formatEther(
+            await hre.ethers.provider.getBalance(deployer.address)
+          )
+        : (hre.ethers as any).utils?.formatEther
+        ? (hre.ethers as any).utils.formatEther(
+            await hre.ethers.provider.getBalance(deployer.address)
+          )
+        : String(await hre.ethers.provider.getBalance(deployer.address)))
+    } native tokens.`
   );
 
   console.log(

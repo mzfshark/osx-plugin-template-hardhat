@@ -3,12 +3,11 @@ import {
   networks as osxCommonsConfigNetworks,
   SupportedNetworks,
 } from '@aragon/osx-commons-configs';
-import '@nomicfoundation/hardhat-chai-matchers';
-import '@nomicfoundation/hardhat-toolbox';
+import '@nomicfoundation/hardhat-ethers';
 import '@openzeppelin/hardhat-upgrades';
 import '@typechain/hardhat';
 import {config as dotenvConfig} from 'dotenv';
-import {BigNumber, ethers} from 'ethers';
+import {ethers} from 'ethers';
 import 'hardhat-deploy';
 import 'hardhat-gas-reporter';
 import {extendEnvironment, HardhatUserConfig} from 'hardhat/config';
@@ -56,13 +55,30 @@ function getHardhatNetworkAccountsConfig(
 
   const hardhatDefaultAccounts = Array(numAccounts)
     .fill(0)
-    .map(
-      (_, i) =>
-        ethers.Wallet.fromMnemonic(
-          hardhatDefaultMnemonic,
-          `m/44'/60'/0'/0/${i}`
-        ).privateKey
-    );
+    .map((_, i) => {
+      const path = `m/44'/60'/0'/0/${i}`;
+      const WalletCtor: any = (ethers as any).Wallet || (ethers as any).wallet;
+      let wallet: any = null;
+
+      // Prefer ethers v6 API name `fromPhrase`, fall back to `fromMnemonic` (v5),
+      // then try HdNode derivation as a last resort.
+      try {
+        if (WalletCtor && typeof WalletCtor.fromPhrase === 'function') {
+          wallet = WalletCtor.fromPhrase(hardhatDefaultMnemonic, path);
+        } else if (WalletCtor && typeof WalletCtor.fromMnemonic === 'function') {
+          wallet = WalletCtor.fromMnemonic(hardhatDefaultMnemonic, path);
+        } else if ((ethers as any).HdNode && typeof (ethers as any).HdNode.fromMnemonic === 'function') {
+          const node = (ethers as any).HdNode.fromMnemonic(hardhatDefaultMnemonic).derivePath(path);
+          wallet = new (ethers as any).Wallet(node.privateKey);
+        } else {
+          throw new Error('No supported wallet-from-mnemonic API found on ethers');
+        }
+      } catch (err) {
+        throw new Error(`Failed to derive default hardhat account: ${String(err)}`);
+      }
+
+      return wallet.privateKey;
+    });
 
   const specAccounts = specifiedAccounts();
   const accounts = specAccounts.concat(
@@ -71,10 +87,10 @@ function getHardhatNetworkAccountsConfig(
 
   const accountsConfig: HardhatNetworkAccountsUserConfig = accounts.map(
     privateKey => {
-      const oneEther = BigNumber.from(10).pow(18);
+      const oneEther = BigInt("1000000000000000000");
       return {
         privateKey,
-        balance: oneEther.mul(100).toString(), // 100 ether
+        balance: (oneEther * BigInt(100)).toString(), // 100 ether
       };
     }
   );
@@ -114,8 +130,8 @@ const config: HardhatUserConfig = {
     hardhat: {
       throwOnTransactionFailures: true,
       throwOnCallFailures: true,
-      blockGasLimit: BigNumber.from(10).pow(6).mul(30).toNumber(), // 30 million, really high to test some things that are only possible with a higher block gas limit
-      gasPrice: BigNumber.from(10).pow(9).mul(150).toNumber(), // 150 gwei
+      blockGasLimit: 10 ** 6 * 30, // 30 million, really high to test some things that are only possible with a higher block gas limit
+      gasPrice: 10 ** 9 * 150, // 150 gwei
       accounts: getHardhatNetworkAccountsConfig(
         Object.keys(namedAccounts).length
       ),
@@ -214,7 +230,7 @@ const config: HardhatUserConfig = {
   },
   typechain: {
     outDir: 'typechain',
-    target: 'ethers-v5',
+    target: 'ethers-v6',
   },
 };
 
