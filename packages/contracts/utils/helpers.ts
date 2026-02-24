@@ -276,5 +276,85 @@ export async function createVersion(
   return tx;
 }
 
+/**
+ * Build fee overrides for transactions using provider fee data with
+ * sensible buffers and Harmony-specific fallbacks to avoid
+ * `transaction underpriced` errors on some RPC providers.
+ */
+export async function getFeeOverrides(
+  hre: HardhatRuntimeEnvironment,
+  gasLimit = 5_000_000
+): Promise<{[key: string]: any}> {
+  const feeData = await hre.ethers.provider.getFeeData();
+  const overrides: any = { gasLimit };
+
+  // Use explicit HARMONY env if provided (in wei)
+  const harmonyGasEnv = process.env.MIN_HARMONY_GAS_PRICE_WEI || process.env.HARMONY_GAS_PRICE;
+
+  try {
+    if (feeData.maxFeePerGas) {
+      // add 20% buffer to avoid underpriced
+      overrides.maxFeePerGas = feeData.maxFeePerGas.mul(120).div(100);
+    }
+    if (feeData.maxPriorityFeePerGas) {
+      overrides.maxPriorityFeePerGas = feeData.maxPriorityFeePerGas.mul(120).div(100);
+    }
+
+    if (!overrides.maxFeePerGas && feeData.gasPrice) {
+      // fallback to legacy gasPrice
+      overrides.gasPrice = feeData.gasPrice.mul(120).div(100);
+    }
+  } catch (err) {
+    // If bigints/BN operations fail for any reason, fallback to env
+  }
+
+  // If we still have nothing, consult environment for harmony
+  if ((!overrides.maxFeePerGas && !overrides.gasPrice) && harmonyGasEnv) {
+    try {
+      const bn = hre.ethers.BigNumber.from(harmonyGasEnv);
+      // If it's small, treat as Gwei
+      if (bn.lt(hre.ethers.BigNumber.from('1000000000'))) {
+        overrides.gasPrice = bn.mul('1000000000');
+      } else {
+        overrides.gasPrice = bn;
+      }
+    } catch (e) {
+      // ignore malformed env
+    }
+  }
+
+  // If running on Harmony, prefer explicit conservative values to
+  // avoid provider 'transaction underpriced' errors: use 150 gwei as
+  // gas price / priority fee and cap maxFeePerGas to 500 gwei.
+  try {
+    const prod = getProductionNetworkName(hre).toLowerCase();
+          if (prod.includes('harmony')) {
+            try {
+              // For Harmony, avoid sending both legacy and EIP-1559 fields together.
+              // Use legacy `gasPrice` = 150 gwei and remove any EIP-1559 keys.
+              const p150 = hre.ethers.parseUnits('150', 'gwei');
+              overrides.gasPrice = p150;
+              // ensure EIP-1559 fields are not present to prevent HH114
+              delete overrides.maxPriorityFeePerGas;
+              delete overrides.maxFeePerGas;
+            } catch (e) {
+              try {
+                const { BigNumber } = hre.ethers;
+                const gwei = BigNumber.from('1000000000');
+                overrides.gasPrice = BigNumber.from(150).mul(gwei);
+                delete overrides.maxPriorityFeePerGas;
+                delete overrides.maxFeePerGas;
+              } catch (err) {
+                // ignore and return current overrides
+              }
+            }
+    }
+  } catch (err) {
+    // ignore network detection errors
+  }
+
+  return overrides;
+}
+
 export const AragonOSxAsciiArt =
   "                                          ____   _____      \n     /\\                                  / __ \\ / ____|     \n    /  \\   _ __ __ _  __ _  ___  _ __   | |  | | (_____  __ \n   / /\\ \\ | '__/ _` |/ _` |/ _ \\| '_ \\  | |  | |\\___ \\ \\/ / \n  / ____ \\| | | (_| | (_| | (_) | | | | | |__| |____) >  <  \n /_/    \\_\\_|  \\__,_|\\__, |\\___/|_| |_|  \\____/|_____/_/\\_\\ \n                      __/ |                                 \n                     |___/                                  \n";

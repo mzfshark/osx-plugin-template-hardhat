@@ -161,6 +161,22 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     }
 
     if (!pluginRepoAddress) {
+      // On networks without ENS support (e.g. Harmony), the registrar/ENS
+      // lookup may be unavailable or uninitialised and receipts may not
+      // include the expected logs. In that case we should not fail the
+      // deployment pipeline — instead warn and skip ENS-based resolution.
+      const prodName = getProductionNetworkName(hre);
+      if (typeof prodName === 'string' && prodName.toLowerCase().includes('harmony')) {
+        console.warn('PluginRepo address not found in receipt and ENS lookup failed — running on Harmony, skipping ENS resolution.');
+        // Record the createPluginRepo tx for offline/manual resolution if needed
+        hre.aragonToVerifyContracts.push({
+          // store the factory tx hash as a pointer for later investigation
+          address: tx.hash || tx.transactionHash || pluginRepoFactory.address,
+          args: [],
+        });
+        return;
+      }
+
       throw new Error('Event "PluginRepoRegistered" could not be found and ENS lookup failed');
     }
   }

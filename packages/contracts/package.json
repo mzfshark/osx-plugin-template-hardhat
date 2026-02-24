@@ -3,14 +3,16 @@
   "version": "0.0.1",
   "license": "AGPL-3.0-or-later",
   "scripts": {
-    "build": "cross-env TS_NODE_TRANSPILE_ONLY=true hardhat compile",
-    "coverage": "hardhat coverage --solcoverjs ./.solcover.js --temp artifacts --testfiles \"test/**/*.ts\" && yarn typechain",
-    "deploy": "hardhat deploy",
+    "build": "node ./scripts/run-hardhat.js compile",
+    "coverage": "node ./scripts/run-hardhat.js coverage --solcoverjs ./.solcover.js --temp artifacts --testfiles \"test/**/*.ts\" && yarn typechain",
     "lint": "yarn lint:sol && yarn lint:ts",
     "lint:sol": "cd ../../ && yarn run lint:contracts:sol",
     "lint:ts": "cd ../../ && yarn run lint:contracts:ts",
-    "test": "hardhat test",
-    "typechain": "cross-env TS_NODE_TRANSPILE_ONLY=true hardhat typechain",
+    "test": "node ./scripts/run-hardhat.js test",
+    "typechain": "node ./scripts/run-hardhat.js typechain",
+    "compile": "node ./scripts/run-hardhat.js compile",
+    "deploy": "node ./scripts/run-hardhat.js deploy",
+    
     "clean": "rimraf ./artifacts ./cache ./coverage ./typechain ./types ./coverage.json && yarn typechain"
   },
   "dependencies": {

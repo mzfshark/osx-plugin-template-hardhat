@@ -20,7 +20,7 @@ async function main() {
     console.error('No network deployments for', network);
     process.exit(1);
   }
-  const pluginRepoFactoryAddress =
+  let pluginRepoFactoryAddress =
     networkDeployments.PluginRepoFactory &&
     networkDeployments.PluginRepoFactory.address;
   console.log(
@@ -36,6 +36,68 @@ async function main() {
       'Ensure the osx-commons-configs package has deployments for this network or run the deploy step first.'
     );
     process.exit(1);
+  }
+
+  // Check whether the address actually has code on the current RPC.
+  const onChainCode = await hre.ethers.provider.getCode(
+    pluginRepoFactoryAddress
+  );
+  console.log(
+    'on-chain code at deployment address (first 66 chars):',
+    onChainCode ? onChainCode.slice(0, 66) : onChainCode
+  );
+  if (!onChainCode || onChainCode === '0x') {
+    // Possible mismatch: deployments point to a different network (e.g., mainnet) while user is connected to another RPC (e.g., harmony).
+    console.warn(
+      `No contract code found at ${pluginRepoFactoryAddress} on the current provider. Trying deployments for the current Hardhat network '${hre.network.name}' as a fallback.`
+    );
+    try {
+      const fallbackNetwork = resolveNetworkName(
+        hre.network.name || productionNetworkName
+      );
+      console.log('Fallback network to check:', fallbackNetwork);
+      const fallbackDeployments = getLatestNetworkDeployment(fallbackNetwork);
+      console.log(
+        'Fallback deployments keys:',
+        fallbackDeployments && Object.keys(fallbackDeployments)
+      );
+      const fallbackAddress =
+        fallbackDeployments &&
+        fallbackDeployments.PluginRepoFactory &&
+        fallbackDeployments.PluginRepoFactory.address;
+      if (fallbackAddress) {
+        const fallbackCode = await hre.ethers.provider.getCode(fallbackAddress);
+        console.log(
+          'on-chain code at fallback address (first 66 chars):',
+          fallbackCode ? fallbackCode.slice(0, 66) : fallbackCode
+        );
+        if (fallbackCode && fallbackCode !== '0x') {
+          console.log(
+            'Using fallback PluginRepoFactory address from network',
+            fallbackNetwork,
+            fallbackAddress
+          );
+          pluginRepoFactoryAddress = fallbackAddress;
+        } else {
+          console.warn(
+            'Fallback address also has no code on this provider. Aborting.'
+          );
+          process.exit(1);
+        }
+      } else {
+        console.warn(
+          'No PluginRepoFactory deployment found for fallback network',
+          fallbackNetwork
+        );
+        process.exit(1);
+      }
+    } catch (e) {
+      console.error(
+        'Error while trying fallback deployments:',
+        e && e.message ? e.message : e
+      );
+      process.exit(1);
+    }
   }
 
   // Prefer runtime ABI from the published ethers factories package if available
@@ -115,8 +177,22 @@ async function main() {
         deployer.address,
       ]);
       const to =
-        factory.address || networkDeployments.PluginRepoFactory.address;
-      const callResult = await hre.ethers.provider.call({to, data});
+        pluginRepoFactoryAddress ||
+        factory.address ||
+        networkDeployments.PluginRepoFactory.address;
+      const callParams = {
+        to,
+        data,
+        from: deployer.address,
+        gasLimit: overrides.gasLimit,
+      };
+      // Include optional fee fields when present on overrides
+      if (overrides.maxFeePerGas)
+        callParams.maxFeePerGas = overrides.maxFeePerGas;
+      if (overrides.maxPriorityFeePerGas)
+        callParams.maxPriorityFeePerGas = overrides.maxPriorityFeePerGas;
+
+      const callResult = await hre.ethers.provider.call(callParams);
       // decodeFunctionResult returns an array-like result for the function's outputs
       let decoded = null;
       try {
